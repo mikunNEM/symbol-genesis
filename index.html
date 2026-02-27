@@ -313,79 +313,7 @@
       display: none;
     }
 
-    /* ── Full message section ── */
-    .section-title {
-      font-size: 0.7rem;
-      text-transform: uppercase;
-      letter-spacing: 0.1em;
-      color: var(--muted);
-      margin-bottom: 1rem;
-      display: flex;
-      align-items: center;
-      gap: 0.75rem;
-    }
 
-    .section-title::after {
-      content: '';
-      flex: 1;
-      height: 1px;
-      background: var(--border);
-    }
-
-    .message-card {
-      background: var(--card);
-      border: 1px solid var(--border);
-      border-radius: 14px;
-      padding: 1.5rem;
-      margin-bottom: 1rem;
-      transition: border-color 0.2s;
-    }
-
-    .message-card:hover {
-      border-color: var(--border-glow);
-    }
-
-    .message-meta {
-      display: flex;
-      align-items: center;
-      gap: 0.75rem;
-      margin-bottom: 0.75rem;
-    }
-
-    .msg-index {
-      font-size: 0.65rem;
-      font-family: 'Space Mono', monospace;
-      background: var(--tag-bg);
-      border: 1px solid var(--tag-border);
-      color: var(--accent);
-      border-radius: 100px;
-      padding: 0.15rem 0.6rem;
-    }
-
-    .msg-hash {
-      font-size: 0.65rem;
-      font-family: 'Space Mono', monospace;
-      color: var(--muted);
-    }
-
-    .msg-hash a {
-      color: inherit;
-      text-decoration: none;
-    }
-
-    .msg-hash a:hover {
-      color: var(--accent);
-    }
-
-    .message-text {
-      font-size: 0.85rem;
-      line-height: 1.75;
-      color: #c8d8f0;
-      white-space: pre-wrap;
-      word-break: break-word;
-    }
-
-    /* ── Loading / Error ── */
     #loading {
       text-align: center;
       padding: 4rem 0;
@@ -495,11 +423,7 @@
           <span class="stat-n" id="stat-names">—</span>
           <span class="stat-l">記録された名前</span>
         </div>
-        <div class="stat-div"></div>
-        <div class="stat">
-          <span class="stat-n" id="stat-msgs">—</span>
-          <span class="stat-l">メッセージ数</span>
-        </div>
+
         <div class="stat-div"></div>
         <div class="stat">
           <span class="stat-n">1</span>
@@ -530,9 +454,6 @@
     <div class="section-title">お名前一覧</div>
     <div id="tags-cloud"></div>
 
-    <!-- Full messages -->
-    <div class="section-title">ブロックチェーンに刻まれたメッセージ全文</div>
-    <div id="messages-list"></div>
 
     <div id="loading">
       <div class="spinner"></div>
@@ -649,8 +570,7 @@
       return names.filter(n => n.length > 0);
     }
 
-    let allMessages = [];  // { text, hash, idx }[]
-    let seenNames = new Set(); // 重複排除用
+    let seenNames = new Set();
 
     // ━━━ Fetch aggregate transactions ━━━━━━━━━━━━━━━━━━
     async function fetchAggregates() {
@@ -684,9 +604,6 @@
                 if (msg && msg.length > 10) {
                   const text = hexToUtf8(msg);
                   if (text && text.length > 5) {
-                    allMessages.push({ text, hash, idx: embedded.meta.index });
-                    // メッセージカードを即追加
-                    appendMessage(allMessages[allMessages.length - 1], allMessages.length);
                     // 名前を抽出して即タグ追加
                     extractNames(text).forEach(n => {
                       const key = n.trim();
@@ -724,7 +641,6 @@
     // ━━━ Render helpers ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
     function updateStats() {
       document.getElementById('stat-names').textContent = seenNames.size.toLocaleString();
-      document.getElementById('stat-msgs').textContent = allMessages.length.toLocaleString();
       document.getElementById('count-info').innerHTML =
         `<b>${seenNames.size.toLocaleString()}</b> 件の名前が記録されています`;
     }
@@ -758,22 +674,6 @@
       appendNameTags(names);
       document.getElementById('count-info').innerHTML =
         `<b>${names.length.toLocaleString()}</b> 件${q ? ' (絞り込み中)' : ''}`;
-    }
-
-    // メッセージカードを1件追加
-    function appendMessage(m, num) {
-      const list = document.getElementById('messages-list');
-      const card = document.createElement('div');
-      card.className = 'message-card';
-      const explorerUrl = `https://symbol.fyi/transactions/${m.hash}`;
-      card.innerHTML = `
-        <div class="message-meta">
-          <span class="msg-index">MSG #${num}</span>
-          <span class="msg-hash"><a href="${explorerUrl}" target="_blank">TX: ${m.hash.slice(0, 10)}…${m.hash.slice(-6)}</a></span>
-        </div>
-        <div class="message-text">${escHtml(m.text)}</div>
-      `;
-      list.appendChild(card);
     }
 
     // ━━━ Search & sort ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
