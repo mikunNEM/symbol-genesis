@@ -512,7 +512,32 @@
     window.addEventListener('resize', initStars);
 
     // ━━━ Core data ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-    const NODE = 'https://sym-main-01.opening-line.jp:3001';
+    let NODE = 'https://sym-main-01.opening-line.jp:3001'; // fallback
+
+    async function getAvailableNode() {
+      try {
+        const res = await fetch(
+          'https://nodewatch.symbol.tools/api/symbol/nodes/peer?only_ssl=true&limit=20&order=random'
+        );
+        const nodes = await res.json();
+
+        // 🇯🇵 日本ノード優先
+        let pool = nodes.filter(n => n.geoLocation?.country === 'Japan' && n.isHealthy);
+
+        // 無ければ全体から healthy を使用
+        if (!pool.length) pool = nodes.filter(n => n.isHealthy);
+
+        // height 最大のノードを選択
+        pool.sort((a, b) => b.height - a.height);
+
+        if (pool.length) {
+          NODE = new URL(pool[0].endpoint).origin;
+          console.log('✅ ノード選択:', NODE);
+        }
+      } catch (e) {
+        console.warn('⚠️ nodewatch 取得失敗、フォールバック使用:', NODE, e);
+      }
+    }
 
     function hexToUtf8(hex) {
       // Remove leading '00' prefix (plain text message marker)
@@ -578,6 +603,9 @@
       const fill = document.getElementById('progress-fill');
       const label = document.getElementById('progress-label');
       loadEl.style.display = 'block';
+      label.textContent = 'ノードを選択中...';
+
+      await getAvailableNode();
 
       let page = 1;
       let fetched = 0;
