@@ -440,30 +440,7 @@
       display: none;
     }
 
-    /* ── Load more ── */
-    .load-more-wrap {
-      text-align: center;
-      margin-top: 2rem;
-    }
 
-    #load-more {
-      background: linear-gradient(135deg, var(--accent), var(--accent2));
-      color: #fff;
-      border: none;
-      font-family: 'Inter', sans-serif;
-      font-size: 0.88rem;
-      font-weight: 600;
-      padding: 0.8rem 2.2rem;
-      border-radius: 12px;
-      cursor: pointer;
-      transition: transform 0.2s, box-shadow 0.2s;
-      display: none;
-    }
-
-    #load-more:hover {
-      transform: translateY(-2px);
-      box-shadow: 0 8px 24px rgba(79, 142, 247, 0.3);
-    }
 
     /* ── Footer ── */
     footer {
@@ -567,9 +544,7 @@
     </div>
     <div id="error"></div>
 
-    <div class="load-more-wrap">
-      <button id="load-more">さらに表示</button>
-    </div>
+
 
     <footer>
       データソース: <a href="https://sym-main-01.opening-line.jp:3001" target="_blank">Symbol Mainnet Node</a>
@@ -674,10 +649,8 @@
       return names.filter(n => n.length > 0);
     }
 
-    let allMessages = [];       // { text, hash, idx }[]
-    let allNames = [];           // string[]
-    let displayedTags = 0;
-    const TAGS_BATCH = 200;
+    let allMessages = [];  // { text, hash, idx }[]
+    let seenNames = new Set(); // 重複排除用
 
     // ━━━ Fetch aggregate transactions ━━━━━━━━━━━━━━━━━━
     async function fetchAggregates() {
@@ -687,10 +660,8 @@
       loadEl.style.display = 'block';
 
       let page = 1;
-      let total = 0;
       let fetched = 0;
 
-      // First: discover how many pages
       while (true) {
         try {
           label.textContent = `ページ ${page} を取得中...`;
@@ -702,32 +673,38 @@
 
           for (const item of data.data) {
             const hash = item.meta.hash;
-            // Get full transaction with embedded transactions
             const r2 = await fetch(`${NODE}/transactions/confirmed/${hash}`);
             if (!r2.ok) continue;
             const full = await r2.json();
 
             if (full.transaction.transactions) {
+              const newNames = [];
               for (const embedded of full.transaction.transactions) {
                 const msg = embedded.transaction.message;
                 if (msg && msg.length > 10) {
                   const text = hexToUtf8(msg);
                   if (text && text.length > 5) {
                     allMessages.push({ text, hash, idx: embedded.meta.index });
-                    total++;
-
-                    // Extract names
-                    const names = extractNames(text);
-                    allNames.push(...names);
+                    // メッセージカードを即追加
+                    appendMessage(allMessages[allMessages.length - 1], allMessages.length);
+                    // 名前を抽出して即タグ追加
+                    extractNames(text).forEach(n => {
+                      const key = n.trim();
+                      if (key && !seenNames.has(key)) {
+                        seenNames.add(key);
+                        newNames.push(key);
+                      }
+                    });
                   }
                 }
               }
+              if (newNames.length > 0) appendNameTags(newNames);
             }
           }
 
           fetched += data.data.length;
-          const pct = Math.min(95, fetched * 3);
-          fill.style.width = pct + '%';
+          fill.style.width = Math.min(95, fetched * 3) + '%';
+          updateStats();
 
           if (data.data.length < 100) break;
           page++;
@@ -741,129 +718,70 @@
 
       fill.style.width = '100%';
       loadEl.style.display = 'none';
-      return;
+      updateStats();
     }
 
-    // ━━━ Render ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-    function renderAll() {
-      // Deduplicate names
-      const uniqueNames = [...new Set(allNames.map(n => n.trim()))].filter(n => n.length > 0);
-
-      document.getElementById('stat-names').textContent = uniqueNames.length.toLocaleString();
+    // ━━━ Render helpers ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+    function updateStats() {
+      document.getElementById('stat-names').textContent = seenNames.size.toLocaleString();
       document.getElementById('stat-msgs').textContent = allMessages.length.toLocaleString();
-
-      renderTags(uniqueNames);
-      renderMessages(allMessages);
+      document.getElementById('count-info').innerHTML =
+        `<b>${seenNames.size.toLocaleString()}</b> 件の名前が記録されています`;
     }
 
-    let currentSortedNames = [];
-
-    function renderTags(names) {
-      // Sort A-Z by default
-      const sorted = [...names].sort((a, b) => a.localeCompare(b, undefined, { sensitivity: 'base' }));
-      currentSortedNames = sorted;
-      doRenderTags(sorted);
-    }
-
-    function doRenderTags(names) {
-      const cloud = document.getElementById('tags-cloud');
-      cloud.innerHTML = '';
-      displayedTags = 0;
-      appendTags(names.slice(0, TAGS_BATCH));
-      displayedTags = Math.min(TAGS_BATCH, names.length);
-
-      updateCountInfo(names.length);
-
-      const btn = document.getElementById('load-more');
-      if (names.length > TAGS_BATCH) {
-        btn.style.display = 'inline-block';
-        btn.textContent = `さらに表示 (残り ${(names.length - displayedTags).toLocaleString()} 件)`;
-      } else {
-        btn.style.display = 'none';
-      }
-    }
-
-    function appendTags(names) {
+    // 取得できた名前タグを即追加（登録順）
+    function appendNameTags(names) {
       const cloud = document.getElementById('tags-cloud');
       const frag = document.createDocumentFragment();
-      names.forEach((name, i) => {
+      names.forEach(name => {
         const tag = document.createElement('span');
         tag.className = 'name-tag';
+        tag.dataset.name = name.toLowerCase();
         tag.textContent = name;
-        tag.style.animationDelay = `${(i % 100) * 5}ms`;
         frag.appendChild(tag);
       });
       cloud.appendChild(frag);
     }
 
-    function renderMessages(msgs) {
-      const list = document.getElementById('messages-list');
-      list.innerHTML = '';
-      msgs.forEach((m, i) => {
-        const card = document.createElement('div');
-        card.className = 'message-card';
-        const explorerUrl = `https://symbol.fyi/transactions/${m.hash}`;
-        card.innerHTML = `
-      <div class="message-meta">
-        <span class="msg-index">MSG #${i + 1}</span>
-        <span class="msg-hash"><a href="${explorerUrl}" target="_blank">TX: ${m.hash.slice(0, 10)}…${m.hash.slice(-6)}</a></span>
-      </div>
-      <div class="message-text">${escHtml(m.text)}</div>
-    `;
-        list.appendChild(card);
-      });
+    // 検索・ソート適用時: タグを全再描画
+    function reRenderTags() {
+      const q = document.getElementById('search').value.toLowerCase();
+      const sel = document.getElementById('sort-select').value;
+      let names = [...seenNames];
+      if (q) names = names.filter(n => n.toLowerCase().includes(q));
+      if (sel === 'az') names.sort((a, b) => a.localeCompare(b, undefined, { sensitivity: 'base' }));
+      else if (sel === 'za') names.sort((a, b) => b.localeCompare(a, undefined, { sensitivity: 'base' }));
+      // 'order' → 挿入順のまま（Set は挿入順を保持）
+
+      const cloud = document.getElementById('tags-cloud');
+      cloud.innerHTML = '';
+      appendNameTags(names);
+      document.getElementById('count-info').innerHTML =
+        `<b>${names.length.toLocaleString()}</b> 件${q ? ' (絞り込み中)' : ''}`;
     }
 
-    function updateCountInfo(count) {
-      document.getElementById('count-info').innerHTML =
-        `<b>${count.toLocaleString()}</b> 件の名前が見つかりました`;
+    // メッセージカードを1件追加
+    function appendMessage(m, num) {
+      const list = document.getElementById('messages-list');
+      const card = document.createElement('div');
+      card.className = 'message-card';
+      const explorerUrl = `https://symbol.fyi/transactions/${m.hash}`;
+      card.innerHTML = `
+        <div class="message-meta">
+          <span class="msg-index">MSG #${num}</span>
+          <span class="msg-hash"><a href="${explorerUrl}" target="_blank">TX: ${m.hash.slice(0, 10)}…${m.hash.slice(-6)}</a></span>
+        </div>
+        <div class="message-text">${escHtml(m.text)}</div>
+      `;
+      list.appendChild(card);
     }
 
     // ━━━ Search & sort ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-    let _allUnique = [];
-
-    function applySearchSort() {
-      const q = document.getElementById('search').value.toLowerCase();
-      const s = document.getElementById('sort-select').value;
-
-      let filtered = _allUnique.filter(n => n.toLowerCase().includes(q));
-
-      if (s === 'az') filtered.sort((a, b) => a.localeCompare(b, undefined, { sensitivity: 'base' }));
-      else if (s === 'za') filtered.sort((a, b) => b.localeCompare(a, undefined, { sensitivity: 'base' }));
-      // 'order' keeps insertion order
-
-      doRenderTags(filtered);
-      updateCountInfo(filtered.length);
-    }
-
-    document.getElementById('search').addEventListener('input', applySearchSort);
-    document.getElementById('sort-select').addEventListener('change', applySearchSort);
-
-    document.getElementById('load-more').addEventListener('click', () => {
-      const q = document.getElementById('search').value.toLowerCase();
-      const s = document.getElementById('sort-select').value;
-      let filtered = _allUnique.filter(n => n.toLowerCase().includes(q));
-      if (s === 'az') filtered.sort((a, b) => a.localeCompare(b, undefined, { sensitivity: 'base' }));
-      else if (s === 'za') filtered.sort((a, b) => b.localeCompare(a, undefined, { sensitivity: 'base' }));
-
-      const next = filtered.slice(displayedTags, displayedTags + TAGS_BATCH);
-      appendTags(next);
-      displayedTags += next.length;
-
-      const btn = document.getElementById('load-more');
-      if (displayedTags >= filtered.length) {
-        btn.style.display = 'none';
-      } else {
-        btn.textContent = `さらに表示 (残り ${(filtered.length - displayedTags).toLocaleString()} 件)`;
-      }
-    });
+    document.getElementById('search').addEventListener('input', reRenderTags);
+    document.getElementById('sort-select').addEventListener('change', reRenderTags);
 
     // ━━━ Boot ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-    (async () => {
-      await fetchAggregates();
-      _allUnique = [...new Set(allNames.map(n => n.trim()))].filter(n => n.length > 0);
-      renderAll();
-    })();
+    fetchAggregates();
   </script>
 </body>
 
