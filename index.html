@@ -409,8 +409,9 @@
       </div>
       <h1>ジェネシスに刻まれた<br />コミュニティメンバー</h1>
       <p class="subtitle">
-        2021年3月17日、Symbol ブロックチェーンのローンチを祝い、
-        世界中のコミュニティメンバーたちが名前を永遠にブロックチェーンへ刻みました。
+        2021年3月16日、Symbol ブロックチェーンのネメシスブロックが生成されました。翌17日、
+        ネットワークが始動し公式ローンチが発表されました。
+        世界中のコミュニティメンバーたちが名前をネメシスブロックに永遠に刻みました。
       </p>
 
       <div class="quote-block">
@@ -428,6 +429,18 @@
         <div class="stat">
           <span class="stat-n">1</span>
           <span class="stat-l">ブロック高</span>
+        </div>
+
+        <div class="stat-div"></div>
+        <div class="stat">
+          <span class="stat-n" style="font-size:1rem;">2021-03-16</span>
+          <span class="stat-l">Nemesis Block 生成 (14:46 JST)</span>
+        </div>
+
+        <div class="stat-div"></div>
+        <div class="stat">
+          <span class="stat-n" style="font-size:1rem;">2021-03-17</span>
+          <span class="stat-l">ネットワーク始動 / 公式発表</span>
         </div>
       </div>
     </header>
@@ -468,10 +481,11 @@
 
 
     <footer>
-      データソース: <a href="https://sym-main-01.opening-line.jp:3001" target="_blank">Symbol Mainnet Node</a>
+      接続ノード: <a id="node-link" href="#" target="_blank">選択中...</a>
       &nbsp;·&nbsp;
       <a href="https://symbol.fyi/blocks/1" target="_blank">Block Explorer</a>
-      &nbsp;·&nbsp; Symbol Mainnet launched 2021-03-17
+      &nbsp;·&nbsp;
+      Nemesis Block: 2021-03-16 14:46 JST
     </footer>
   </div>
 
@@ -533,6 +547,9 @@
         if (pool.length) {
           NODE = new URL(pool[0].endpoint).origin;
           console.log('✅ ノード選択:', NODE);
+          // footerのノードリンクを更新
+          const link = document.getElementById('node-link');
+          if (link) { link.href = NODE; link.textContent = new URL(NODE).host; }
         }
       } catch (e) {
         console.warn('⚠️ nodewatch 取得失敗、フォールバック使用:', NODE, e);
